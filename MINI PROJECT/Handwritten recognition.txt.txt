@@ -1,0 +1,69 @@
+import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense, Dropout
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+from sklearn.model_selection import train_test_split
+import numpy as np
+import os
+from PIL import Image
+
+# Load and preprocess the dataset
+def load_data(data_dir, img_size=28):
+    labels = os.listdir(data_dir)  # Assume each folder represents a label
+    X, y = [], []
+    label_map = {label: idx for idx, label in enumerate(labels)}
+    
+    for label in labels:
+        label_dir = os.path.join(data_dir, label)
+        for img_file in os.listdir(label_dir):
+            img_path = os.path.join(label_dir, img_file)
+            img = Image.open(img_path).convert('L')  # Convert to grayscale
+            img = img.resize((img_size, img_size))
+            X.append(np.array(img))
+            y.append(label_map[label])
+    
+    X = np.array(X).reshape(-1, img_size, img_size, 1) / 255.0  # Normalize
+    y = tf.keras.utils.to_categorical(y, num_classes=len(labels))
+    
+    return X, y, label_map
+
+# Load data
+data_dir = "path_to_your_dataset"
+X, y, label_map = load_data(data_dir)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Build the CNN model
+model = Sequential([
+    Conv2D(32, (3, 3), activation='relu', input_shape=(28, 28, 1)),
+    MaxPooling2D((2, 2)),
+    Conv2D(64, (3, 3), activation='relu'),
+    MaxPooling2D((2, 2)),
+    Flatten(),
+    Dense(128, activation='relu'),
+    Dropout(0.5),
+    Dense(len(label_map), activation='softmax')
+])
+
+# Compile the model
+model.compile(optimizer='adam', 
+              loss='categorical_crossentropy', 
+              metrics=['accuracy'])
+
+# Train the model
+model.fit(X_train, y_train, epochs=10, batch_size=32, validation_data=(X_test, y_test))
+
+# Save the model
+model.save("handwritten_symbol_recognizer.h5")
+
+# Test with a new image
+def predict_symbol(image_path, model, label_map, img_size=28):
+    img = Image.open(image_path).convert('L').resize((img_size, img_size))
+    img_array = np.array(img).reshape(1, img_size, img_size, 1) / 255.0
+    prediction = model.predict(img_array)
+    label = list(label_map.keys())[np.argmax(prediction)]
+    return label
+
+# Example prediction
+model = tf.keras.models.load_model("handwritten_symbol_recognizer.h5")
+symbol = predict_symbol("path_to_test_image.png", model, label_map)
+print("Predicted symbol:", symbol)
